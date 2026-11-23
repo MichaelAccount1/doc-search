@@ -318,7 +318,7 @@ dialog h3 { margin: 0 0 4px; }
     which some PCs allow and some don't.</p>
   <p class="small"><b>What is searched</b>: in Word files the body, tables, text boxes, headers, footers, footnotes,
     endnotes and comments (the last ones are shown after the body). In PowerPoint, every slide's text and its speaker
-    notes; in Excel, every sheet's cells, row by row (as stored: dates show as numbers, formulas as their last result).
+    notes; in Excel, every sheet's cells, row by row (dates as 2023-07-14, other numbers as stored, formulas as their last result).
     In PDFs, the text of each page: a scanned PDF is pictures of pages, with no text to find. In Outlook messages (.msg)
     and .eml e-mails, the subject, sender, recipients, date, attachment names and the message itself. Old .doc, .xls and
     .ppt files can't be read here: save them in the new format first.</p>
@@ -858,6 +858,57 @@ function xlStr(x) {  // a string item's text: its runs, without the phonetic gui
   for (let t; (t = tr.exec(x));) s += t[1];
   return xlUnesc(s);
 }
+// Dates: Excel keeps a date as a number of days (45121 is 14 July 2023) and only its cell's number format says it is
+// one. Each style (xf in styles.xml's cellXfs) points at a format: a built-in id, or a custom code. Those cells are
+// shown as 2023-07-14, with the time (13:30, 13:30:15) when the format has one; the stored number is shown nowhere
+const XL_FMT = {};  // built-in format ids that are dates or times (ids 27-36 and 50-58 are the East Asian locales' ones)
+for (const id of [14, 15, 16, 17, 27, 28, 29, 30, 31, 36, 50, 51, 52, 53, 54, 55, 56, 57, 58]) XL_FMT[id] = { date: true };
+XL_FMT[22] = { date: true, time: true };
+for (const id of [18, 20, 32, 34]) XL_FMT[id] = { time: true };
+for (const id of [19, 21, 33, 35, 45, 47]) XL_FMT[id] = { time: true, secs: true };
+XL_FMT[46] = { time: true, secs: true, elapsed: true };  // [h]:mm:ss
+function xlFmtKind(code) {  // a custom format code: a date or time if it has d, m, y, h or s outside quotes, escapes and brackets
+  let c = String(code || '').split(';')[0];  // the first section, the one for positive numbers
+  const elapsed = /\[(?:h+|m+|s+)\]/i.test(c);
+  c = c.replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/[_*]./g, '').replace(/\[[^\]]*\]/g, '').replace(/am\/pm|a\/p/gi, '').toLowerCase();
+  const d = /[dy]/.test(c), h = /h/.test(c), s = /s/.test(c), m = /m/.test(c);
+  if (!(d || h || s || m || elapsed)) return null;
+  const time = h || s || elapsed || (m && !d && /m{1,2}:|:m/.test(c));
+  return { date: d || (m && !time), time, secs: s, elapsed: elapsed && !d };
+}
+async function xlDateStyles(buf, dir, path) {  // style index -> its date kind, or null for a plain number
+  const bytes = await zipBytes(buf, dir.get(path));
+  if (!bytes) return [];
+  let dom;
+  try { dom = xmlDoc(bytes); } catch { return []; }
+  const root = dom.documentElement, ns = root.namespaceURI;
+  const kidsOf = (el, name) => el ? [...el.children].filter(x => x.localName === name && x.namespaceURI === ns) : [];
+  const custom = new Map(kidsOf(kidsOf(root, 'numFmts')[0], 'numFmt').map(f => [+f.getAttribute('numFmtId'), f.getAttribute('formatCode')]));
+  return kidsOf(kidsOf(root, 'cellXfs')[0], 'xf').map(x => {
+    const id = +(x.getAttribute('numFmtId') || 0);
+    return custom.has(id) ? xlFmtKind(custom.get(id)) : XL_FMT[id] || null;
+  });
+}
+const pad2 = n => String(n).padStart(2, '0');
+function xlDate(v, k, d1904) {  // a cell's number in a date or time format, as 2023-07-14, 2023-07-14 13:30, 13:30:15
+  const x = Number(v);
+  if (!isFinite(x) || x < 0 || x >= 2958466) return null;  // outside Excel's dates: it shows #### for these
+  const total = Math.round(x * 86400), days = Math.floor(total / 86400), sec = total - days * 86400;
+  const hms = h => h + ':' + pad2(Math.floor(sec / 60) % 60) + (k.secs ? ':' + pad2(sec % 60) : '');
+  if (k.elapsed) return hms(Math.floor(total / 3600));  // [h]:mm, hours past 24
+  const time = hms(pad2(Math.floor(sec / 3600)));
+  if (!k.date) return time;
+  let day;
+  if (d1904) day = new Date(Date.UTC(1904, 0, 1) + days * 864e5).toISOString().slice(0, 10);
+  else if (days === 60) day = '1900-02-29';  // Excel's own day that never was (it copied Lotus 1-2-3's leap-year slip)
+  else day = new Date(Date.UTC(1899, 11, 30) + (days < 60 ? days + 1 : days) * 864e5).toISOString().slice(0, 10);
+  return k.time ? day + ' ' + time : day;
+}
+function xlIsoDate(v) {  // a t="d" cell: an ISO 8601 date written out
+  const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(:\d{2})?)?/.exec(v);
+  if (!m) return xlUnesc(v);
+  return m[2] && (m[2] !== '00:00' || (m[3] && m[3] !== ':00')) ? m[1] + ' ' + m[2] + (m[3] && m[3] !== ':00' ? m[3] : '') : m[1];
+}
 const colIndex = s => { let n = 0; for (const ch of s.toUpperCase()) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
 const colName = i => { let s = ''; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
 async function parseXlsx(buf, gen) {
@@ -877,6 +928,9 @@ async function parseXlsx(buf, gen) {
     while ((m = re.exec(sstText))) sst.push(xlStr(m[1] || ''));
   }
   const wbx = await zipText(buf, dir.get(wb), 5e6);
+  const d1904 = /<(?:\w+:)?workbookPr\b[^>]*?\bdate1904="(?:1|true)"/.test(wbx);  // Mac workbooks may count days from 1904
+  const stRel = rels.find(r => /\/styles$/.test(r.type));
+  const dateXf = await xlDateStyles(buf, dir, stRel ? resolvePart(base, stRel.target) : base + 'styles.xml');
   const sheets = [];
   const sre = /<(?:\w+:)?sheet\b([^>]*)\/?>/g;
   let m;
@@ -916,7 +970,9 @@ async function parseXlsx(buf, gen) {
         else {
           const vv = /<(?:\w+:)?v>([^<]*)<\/(?:\w+:)?v>/.exec(c[2]);
           if (!vv) continue;
-          v = t === 's' ? (sst[+vv[1]] ?? '') : t === 'b' ? (vv[1] === '1' ? 'TRUE' : 'FALSE') : xlUnesc(vv[1]);
+          const st = t === 'n' && /\bs="(\d+)"/.exec(c[1]), k = st && dateXf[+st[1]];
+          v = t === 's' ? (sst[+vv[1]] ?? '') : t === 'b' ? (vv[1] === '1' ? 'TRUE' : 'FALSE') : t === 'd' ? xlIsoDate(vv[1])
+            : k ? (xlDate(vv[1], k, d1904) ?? xlUnesc(vv[1])) : xlUnesc(vv[1]);
         }
         if (v !== '') {
           if (text) text += ' | ';
