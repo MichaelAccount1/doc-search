@@ -244,7 +244,7 @@ dialog h3 { margin: 0 0 4px; }
           <tr><td><code>/\d{3}-\d{4}/</code></td><td>a regular expression</td></tr>
         </table>
         <p class="small">Private by design: your files are read inside this browser tab only. The page doesn't upload or
-          save them, and its security policy forbids it from making any network connection. Closing the tab forgets
+          save them, and its security policy blocks it from contacting any server. Closing the tab forgets
           everything. (The copy buttons put text on your clipboard.)</p>
       </div>
       <div id="doc" translate="no"></div>
@@ -261,13 +261,13 @@ dialog h3 { margin: 0 0 4px; }
     <tr><td><code>budget report</code></td><td>Files with both words. <i>Any word</i> (top bar) finds files with either.</td></tr>
     <tr><td><code>"next quarter"</code></td><td>The exact phrase (line breaks and extra spaces between the words are fine).</td></tr>
     <tr><td><code>analy*</code></td><td><code>*</code> stands for any letters: analysis, analyst, analyze. <code>*ment</code> works too.</td></tr>
-    <tr><td><code>gr?y</code></td><td><code>?</code> stands for exactly one letter: grey, gray. (<code>colo*r</code> finds color and colour.)</td></tr>
+    <tr><td><code>gr?y</code></td><td><code>?</code> stands for exactly one letter: grey, gray. (<code>colo*r</code> finds color and colour.) A <code>?</code> ending a word is a question mark: <code>report?</code></td></tr>
     <tr><td><code>"rep* due"</code></td><td>Wildcards work inside phrases.</td></tr>
     <tr><td><code>+urgent</code></td><td>Must be there, even in <i>Any word</i> mode.</td></tr>
     <tr><td><code>-draft</code></td><td>Leaves out files (or paragraphs) that contain it. Put a minus sign in quotes to search for it: <code>"-5"</code>.</td></tr>
     <tr><td><code>invoice OR receipt</code></td><td>Either word (<code>|</code> works too). Mix freely: <code>tax "form 1040" OR w2 -2019</code>.</td></tr>
-    <tr><td><code>file:*.docx</code></td><td>Only files whose name matches (<code>file:minutes</code>, <code>file:2024*</code>, <code>-file:old</code>). A folder name works too.</td></tr>
-    <tr><td><code>/\b\d{3}-\d{4}\b/</code></td><td>A regular expression (JavaScript syntax).</td></tr>
+    <tr><td><code>file:*.docx</code></td><td>Only files whose name or folder matches (<code>file:minutes</code>, <code>file:2024*</code>, <code>-file:old</code>). Applies whatever the All / Any setting.</td></tr>
+    <tr><td><code>/\b\d{3}-\d{4}\b/</code></td><td>A regular expression (JavaScript syntax; flags <code>i</code>, <code>s</code>, <code>m</code>), tried on each paragraph or line. It runs when you press Enter.</td></tr>
   </table>
   <p class="small"><b>Whole words</b>: <code>cat</code> finds "cat" but not "category" (use <code>cat*</code>). Turn it off
     to find text anywhere, as Ctrl+F does. <b>Same paragraph / line</b>: all the words must be in one paragraph (or one
@@ -285,6 +285,9 @@ dialog h3 { margin: 0 0 4px; }
 </dialog>
 <script>
 'use strict';
+for (const k of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel', 'RTCSessionDescription', 'RTCIceCandidate']) {
+  try { Object.defineProperty(window, k, { value: undefined, writable: false, configurable: false }); } catch { /* keep going */ }
+}
 const $ = s => document.querySelector(s);
 const W_TRANSITIONAL = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 let W = W_TRANSITIONAL;  // set per file before its (synchronous) walk
@@ -482,9 +485,13 @@ function runs(node, segs) {
       if (ln === 'r') run(ch, segs);
       else if (ln === 'del' || ln === 'moveFrom' || ln === 'pPr' || ln === 'rPr' || ln === 'p' || ln === 'tbl') continue;
       else runs(ch, segs);  // hyperlink, ins, fldSimple, smartTag, sdt, sdtContent, customXml, moveTo ...
+    } else if (ch.namespaceURI === MATH && (ln === 'oMath' || ln === 'oMathPara')) {  // an equation: its text
+      const t = [...ch.getElementsByTagNameNS(MATH, 't')].map(x => x.textContent).join('');
+      if (t) segs.push({ t, i: true });
     }
   }
 }
+const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
 function run(r, segs) {
   const rPr = kid(r, 'rPr');
@@ -534,11 +541,12 @@ async function loadOne(t) {
     const buf = await t.file.arrayBuffer();
     Object.assign(doc, t.kind === 'docx' ? await parseDocx(buf) : parseText(buf));
   } catch (e) { doc.err = String(e && e.message || e); }
+  const sep = doc.kind === 'text' ? '\n' : SEP;  // a text file's lines: a phrase may run on over a line break
   const starts = [];
   let at = 0;
-  for (const b of doc.blocks) { starts.push(at); at += b.text.length + SEP.length; }
+  for (const b of doc.blocks) { starts.push(at); at += b.text.length + sep.length; }
   doc.starts = starts;
-  doc.all = doc.blocks.map(b => b.text).join(SEP);
+  doc.all = doc.blocks.map(b => b.text).join(sep);
   return doc;
 }
 
@@ -559,6 +567,8 @@ async function addEntries(list) {
   showLoaded();
   if (!todo.length) { if (list.length) toast('Nothing new to add: those files are loaded already, or of a kind this page skips.'); return; }
   const bar = $('#progress'), gen = S.gen;
+  S.loading = true;
+  showLoaded();
   bar.classList.remove('hidden');
   let done = 0, next = 0;
   const work = async () => {
@@ -568,6 +578,7 @@ async function addEntries(list) {
       if (S.gen !== gen) return;  // Clear was pressed meanwhile: forget it
       S.docs.push(doc);
       done++;
+      await new Promise(r => setTimeout(r, 0));  // let the page paint the progress
       if (done % 5 === 0 || done === todo.length) {
         bar.firstElementChild.style.width = (100 * done / todo.length) + '%';
         $('#count').innerHTML = `Reading <b>${done.toLocaleString()}</b> of ${todo.length.toLocaleString()} files...`;
@@ -575,8 +586,9 @@ async function addEntries(list) {
     }
   };
   await Promise.all([work(), work(), work(), work()]);
-  bar.classList.add('hidden');
   if (S.gen !== gen) return;
+  S.loading = false;
+  bar.classList.add('hidden');
   bar.firstElementChild.style.width = '0';
   S.docs.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
   showLoaded();
@@ -586,7 +598,7 @@ async function addEntries(list) {
 function bump(k) { S.skipped.set(k, (S.skipped.get(k) || 0) + 1); }
 
 function showLoaded() {
-  const have = S.docs.length > 0;
+  const have = S.docs.length > 0 || S.loading;
   $('#drop').classList.toggle('hidden', have);
   $('#filesbar').classList.toggle('hidden', !have);
   $('#summary').classList.toggle('hidden', !have);
@@ -599,7 +611,7 @@ function showLoaded() {
     h += ` &middot; <button class="linkbtn" id="detailsBtn">${bad.length ? bad.length + ' unreadable' : ''}` +
       `${bad.length && skipped ? ', ' : ''}${skipped ? skipped.toLocaleString() + ' skipped' : ''}</button>`;
   }
-  $('#count').innerHTML = h;
+  $('#count').innerHTML = S.loading ? 'Reading files...' : h;
   const d = $('#details');
   d.innerHTML = bad.map(x => `<div class="bad">${esc(x.path)}: ${esc(x.err)}</div>`).join('') +
     [...S.skipped].map(([k, v]) => `<div>Skipped ${v.toLocaleString()} &times; ${esc(k)}</div>`).join('') +
@@ -654,6 +666,7 @@ function hasFiles(e) { return e.dataTransfer && [...e.dataTransfer.types].includ
 $('#clearBtn').onclick = () => {
   Object.assign(S, { docs: [], keys: new Set(), skipped: new Map(), results: [], flat: [], cur: -1, open: null, win: null });
   S.gen++;
+  S.loading = false;
   $('#progress').classList.add('hidden');
   $('#results').innerHTML = '';
   $('#doc').innerHTML = '';
@@ -676,11 +689,11 @@ function tokenize(q) {
     let sign = '';
     if ((q[i] === '+' || q[i] === '-') && i + 1 < n && !/\s/.test(q[i + 1])) sign = q[i++];
     let field = '';
-    const fm = /^(?:file|name|in):/i.exec(q.slice(i, i + 5));
+    const fm = /^file:/i.exec(q.slice(i, i + 5));
     if (fm) {
       field = 'file';
       i += fm[0].length;
-      if (i >= n || /\s/.test(q[i])) { out.push({ kind: 'bad', text: 'file: needs the name right after the colon, e.g. file:minutes or file:*.docx' }); continue; }
+      if (i >= n || /\s/.test(q[i])) { out.push({ kind: 'bad', text: 'file: needs the name right after the colon, e.g. file:minutes or file:*.docx (to find the text "file:", put it in quotes)' }); continue; }
     }
     if (QUOTES.includes(q[i])) {
       let j = i + 1;
@@ -704,7 +717,7 @@ function tokenize(q) {
         i = k;
         continue;
       }
-      if (/[[(\\]/.test(q.slice(i, j))) {  // looks like a regex that never closes
+      if (/[[(\\+*?{|^$]/.test(q.slice(i, j))) {  // looks like a regex that never closes
         out.push({ kind: 'bad', text: 'This regular expression has no closing slash: ' + q.slice(i, j) });
         i = j;
         continue;
@@ -716,6 +729,7 @@ function tokenize(q) {
     i = j;
     if (!sign && !field && (w === 'OR' || w === '|' || w === '||')) { out.push({ kind: 'or' }); continue; }
     if (!sign && !field && (w === 'AND' || w === '&&')) { out.push({ kind: 'and' }); continue; }
+    if (!sign && !field && (w === '-' || w === '+')) continue;  // a sign typed before its word
     w.split('|').filter(Boolean).forEach((x, k) => {  // budget|invoice: either one
       if (k) out.push({ kind: 'or' });
       out.push({ sign, field, kind: 'term', text: x });
@@ -728,14 +742,16 @@ const escRe = s => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 const WORD = '[\\p{L}\\p{N}_\\p{M}]';
 function termRe(text, whole) {
   let s = '';
-  for (const ch of text) {
+  const chars = [...text];
+  chars.forEach((ch, k) => {
     if (ch === '*') s += whole ? "[\\p{L}\\p{N}_\\p{M}'\u2019-]*" : '\\S*';
+    else if (ch === '?' && k === chars.length - 1 && k > 0 && /[\p{L}\p{N}]/u.test(chars[k - 1])) s += '\\??';  // report? : a question
     else if (ch === '?') s += whole ? WORD : '\\S';
     else if (/['\u2018\u2019\u02bc]/.test(ch)) s += "['\u2018\u2019\u02bc]";
     else if (/[-\u2010\u2011\u2012\u2013\u2014\u2212]/.test(ch)) s += '[-\u2010\u2011\u2012\u2013\u2014\u2212]';
     else if (ch === '"' || ch === '\u201c' || ch === '\u201d') s += '["\u201c\u201d]';
     else s += escRe(ch);
-  }
+  });
   return s;
 }
 
@@ -771,10 +787,10 @@ function makeAlt(t, o, notes) {
   const text = t.text || '';
   if (t.field === 'file') {
     const pat = text.replace(/\\/g, '/');
-    if (!pat) return null;
-    if (/[*?]/.test(pat)) {  // a pattern is matched against the file name (or the end of the path); * stops at a folder
+    if (!pat) { notes.push('file:"" needs a name inside the quotes'); notes.fatal = true; return null; }
+    if (/[*?]/.test(pat)) {  // a pattern matches whole names in the path: the file's or a folder's; * stops at a /
       const g = [...pat].map(ch => ch === '*' ? '[^/]*' : ch === '?' ? '[^/]' : escRe(ch)).join('');
-      return { file: true, re: new RegExp('(^|/)' + g + '$', 'iu') };
+      return { file: true, re: new RegExp('(^|/)' + g + '(/|$)', 'iu') };
     }
     return { file: true, re: new RegExp(escRe(pat), 'iu') };  // plain text: anywhere in the path, folders too
   }
@@ -809,7 +825,7 @@ function findAll(doc, alt) {
       if (!t) continue;
       re.lastIndex = 0;
       while ((m = re.exec(t)) !== null) {
-        if (m[0].length === 0) { re.lastIndex = after(t, re.lastIndex); if (re.lastIndex > t.length) break; continue; }
+        if (m[0].length === 0) { alt.zw = true; re.lastIndex = after(t, re.lastIndex); if (re.lastIndex > t.length) break; continue; }
         add(b, m.index, m.index + m[0].length);
         if (n >= MAX_PER_TERM) break;
       }
@@ -824,6 +840,8 @@ function findAll(doc, alt) {
       const s = m.index - starts[lo], len = doc.blocks[lo].text.length;
       if (s < len) {
         add(lo, s, Math.min(len, s + m[0].length));
+        const end = m.index + m[0].length;  // the rest of a phrase that ran on to the next lines
+        for (let b = lo + 1; b < starts.length && end > starts[b]; b++) { add(b, 0, Math.min(doc.blocks[b].text.length, end - starts[b])); n--; }
         if (n >= MAX_PER_TERM) break;
       }
     }
@@ -918,6 +936,7 @@ function search(openFirst) {
   const res = [];
   S.capped = new Set();
   if (Q.any && !Q.notes.fatal) for (const d of S.docs) { const r = evalDoc(d, Q, o); if (r) { d.map = r.map; res.push(r); } }
+  if (Q.clauses.some(c => c.alts.some(a => a.zw))) Q.notes.push('A regular expression here also matches empty text (between characters); those spots are not listed.');
   const name = (a, b) => a.doc.path.localeCompare(b.doc.path, undefined, { numeric: true, sensitivity: 'base' });
   if (o.sort === 'hits') res.sort((a, b) => b.count - a.count || name(a, b));
   else if (o.sort === 'date') res.sort((a, b) => b.doc.modified - a.doc.modified || name(a, b));
@@ -1249,8 +1268,9 @@ $('#backBtn').onclick = () => document.body.classList.remove('viewing');
 let timer;
 $('#q').addEventListener('input', () => {
   clearTimeout(timer);
-  const big = S.docs.reduce((a, d) => a + d.all.length, 0) > 40e6;
-  if (!big) timer = setTimeout(() => search(false), 220);
+  const big = S.docs.reduce((a, d) => a + d.all.length, 0) > 40e6, rx = /(^|\s)[+-]?\//.test($('#q').value);
+  if (!big && !rx) timer = setTimeout(() => search(false), 220);
+  else if (S.docs.length) $('#summary').innerHTML = 'Press Enter to search' + (rx ? ' (a regular expression runs only on Enter)' : ' (with this many files, search runs on Enter)');
 });
 $('#q').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); search(true); }
