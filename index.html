@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Nothing this page loads can leave the tab: no network connections of any kind are allowed (connect-src falls back
+     to 'none'), no outside scripts, styles, fonts or images. Your files are read by your own browser, in memory. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Document Search</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='3' width='17' height='23' rx='2' fill='%232f6fdf'/%3E%3Crect x='9' y='9' width='9' height='2' fill='%23fff'/%3E%3Crect x='9' y='14' width='9' height='2' fill='%23fff'/%3E%3Ccircle cx='21' cy='20' r='6' fill='none' stroke='%23e9a01b' stroke-width='3'/%3E%3Cpath d='M25 24l4 4' stroke='%23e9a01b' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f4f7; --panel: #ffffff; --ink: #1d2330; --ink2: #545d70; --ink3: #858da0; --line: #dfe2ea; --soft: #eef1f6;
+  --accent: #2f6fdf; --accent-ink: #ffffff; --accent-soft: #e4edfd; --cur: #fff7d6; --cur-line: #e9a01b;
+  --page: #ffffff; --page-shadow: 0 1px 3px rgba(20,30,60,.12), 0 6px 24px rgba(20,30,60,.08); --err: #b42318;
+  --t0: #ffe066; --t1: #9be8c9; --t2: #ffc2d9; --t3: #ffd3a1; --t4: #d7c9ff; --t5: #b8dcff; --mark-ink: #1d2330;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161b; --panel: #1b1e25; --ink: #e6e8ee; --ink2: #a8afbf; --ink3: #7c8496; --line: #2c313c; --soft: #232731;
+    --accent: #6d9cff; --accent-ink: #0d1424; --accent-soft: #1f2a44; --cur: #2d2a1c; --cur-line: #f0b43c;
+    --page: #20242c; --page-shadow: 0 1px 3px rgba(0,0,0,.5); --err: #ff8a7a;
+    --t0: #7a6514; --t1: #1f6b55; --t2: #7a3150; --t3: #7d4d1a; --t4: #4f3f8c; --t5: #23527f; --mark-ink: #f4f5f8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161b; --panel: #1b1e25; --ink: #e6e8ee; --ink2: #a8afbf; --ink3: #7c8496; --line: #2c313c; --soft: #232731;
+  --accent: #6d9cff; --accent-ink: #0d1424; --accent-soft: #1f2a44; --cur: #2d2a1c; --cur-line: #f0b43c;
+  --page: #20242c; --page-shadow: 0 1px 3px rgba(0,0,0,.5); --err: #ff8a7a;
+  --t0: #7a6514; --t1: #1f6b55; --t2: #7a3150; --t3: #7d4d1a; --t4: #4f3f8c; --t5: #23527f; --mark-ink: #f4f5f8;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 8px 16px; }
+.brand { font-weight: 650; font-size: 15px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.brand svg { width: 22px; height: 22px; }
+.qwrap { flex: 1 1 420px; display: flex; gap: 6px; min-width: 0; }
+#q { flex: 1; min-width: 0; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg);
+  font-size: 15px; outline: none; }
+#q:focus { border-color: var(--accent); background: var(--panel); }
+.ibtn { border: 1.5px solid var(--line); background: var(--panel); border-radius: 8px; padding: 0 12px; min-height: 38px;
+  white-space: nowrap; }
+.ibtn:hover { border-color: var(--accent); }
+.opts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; color: var(--ink2); font-size: 13px; }
+.opts label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; white-space: nowrap; }
+.opts select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 3px 6px; }
+main { flex: 1; display: grid; grid-template-columns: minmax(320px, 42%) minmax(0, 1fr); min-height: 0; }
+#left { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--line); background: var(--panel); }
+#right { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.filesbar { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.filesrow { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.count { color: var(--ink2); font-size: 13px; margin-right: auto; }
+.count b { color: var(--ink); }
+.sbtn { border: 1px solid var(--line); background: var(--soft); border-radius: 6px; padding: 4px 10px; font-size: 13px; }
+.sbtn:hover { border-color: var(--accent); }
+a.sbtn { color: var(--ink); text-decoration: none; display: inline-block; }
+.sbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.linkbtn { border: 0; background: none; color: var(--accent); padding: 0; font-size: 13px; text-decoration: underline; }
+.baserow { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink2); }
+.baserow input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px;
+  background: var(--bg); font-size: 12.5px; }
+.details { font-size: 12.5px; color: var(--ink2); max-height: 160px; overflow: auto; background: var(--soft);
+  border-radius: 6px; padding: 6px 10px; }
+.details .bad { color: var(--err); }
+.progress { height: 4px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.progress div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+#summary { padding: 8px 16px; font-size: 13px; color: var(--ink2); border-bottom: 1px solid var(--line); min-height: 34px; }
+#summary b { color: var(--ink); }
+#summary .note { color: var(--err); display: block; }
+#results { flex: 1; overflow: auto; overscroll-behavior: contain; }
+.grp { border-bottom: 1px solid var(--line); }
+.fhead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  border: 0; background: var(--soft); padding: 7px 16px 7px 10px; }
+.fhead:hover .fname { color: var(--accent); }
+.chev { border: 0; background: none; color: var(--ink3); width: 20px; height: 20px; padding: 0; flex: none; font-size: 11px;
+  transition: transform .12s; }
+.grp.closed .chev { transform: rotate(-90deg); }
+.grp.closed .hits { display: none; }
+.fname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fdir { color: var(--ink3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.fcount { color: var(--ink2); font-size: 12px; white-space: nowrap; }
+.badge { font-size: 10.5px; font-weight: 650; letter-spacing: .03em; padding: 1px 5px; border-radius: 4px; flex: none;
+  background: var(--accent-soft); color: var(--accent); text-transform: uppercase; }
+.hit { display: block; width: 100%; text-align: left; border: 0; border-left: 3px solid transparent; background: none;
+  padding: 7px 16px 8px 30px; }
+.hit:hover { background: var(--soft); }
+.hit.sel { background: var(--accent-soft); border-left-color: var(--accent); }
+.loc { display: block; font-size: 11.5px; color: var(--ink3); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.snip { display: block; color: var(--ink); overflow-wrap: anywhere; }
+.more { display: block; margin: 12px auto 18px; }
+mark { color: var(--mark-ink); border-radius: 2px; padding: 0 1px; background: var(--t0); }
+mark.t1 { background: var(--t1); } mark.t2 { background: var(--t2); } mark.t3 { background: var(--t3); }
+mark.t4 { background: var(--t4); } mark.t5 { background: var(--t5); }
+.vbar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 14px; display: flex; flex-wrap: wrap;
+  gap: 6px 10px; align-items: center; }
+.vtitle { flex: 1 1 260px; min-width: 0; }
+.vname { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vpath { font-size: 12px; color: var(--ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vnav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.vpos { font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
+.back { display: none; }
+#viewer { flex: 1; overflow: auto; padding: 22px 18px 60px; overscroll-behavior: contain; }
+.page { background: var(--page); box-shadow: var(--page-shadow); border-radius: 4px; max-width: 860px; margin: 0 auto;
+  padding: 44px 56px 60px; font: 15px/1.55 Calibri, Carlito, "Segoe UI", system-ui, sans-serif; }
+.page .p, .page .li, .page .h { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; border-radius: 3px;
+  scroll-margin: 40vh; }
+.page .p.empty { min-height: 8px; margin: 0 0 4px; }
+.page .li { padding-left: 22px; position: relative; }
+.page .li::before { content: "•"; position: absolute; left: 7px; color: var(--ink2); }
+.page .h { font-weight: 650; margin: 18px 0 8px; }
+.page .h1 { font-size: 1.6em; } .page .h2 { font-size: 1.3em; } .page .h3 { font-size: 1.14em; }
+.page .h4, .page .h5, .page .h6 { font-size: 1em; }
+.page table.dt { border-collapse: collapse; margin: 6px 0 14px; width: 100%; }
+.page table.dt td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; }
+.page table.dt td > :last-child { margin-bottom: 0; }
+.cur { background: var(--cur); box-shadow: -10px 0 0 var(--cur), 10px 0 0 var(--cur), -13px 0 0 var(--cur-line); }
+.txt { font: 13px/1.5 Consolas, "Cascadia Mono", ui-monospace, monospace; max-width: none; padding: 16px 0 30px; }
+.ln { display: flex; scroll-margin: 40vh; }
+.ln .no { flex: none; width: 64px; text-align: right; padding-right: 12px; color: var(--ink3); user-select: none; }
+.ln .tx { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 16px; min-width: 0; }
+.ln.cur { box-shadow: inset 3px 0 0 var(--cur-line); }
+.winbtn { display: block; margin: 8px auto; }
+.empty-state { max-width: 560px; margin: 8vh auto 0; padding: 0 20px; color: var(--ink2); }
+.empty-state h2 { color: var(--ink); font-size: 18px; margin: 0 0 8px; }
+.drop { margin: 18px 16px; border: 2px dashed var(--line); border-radius: 12px; padding: 26px 20px; text-align: center;
+  color: var(--ink2); }
+.drop h2 { color: var(--ink); font-size: 17px; margin: 0 0 6px; }
+.drop .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 14px 0 10px; }
+.drop .big { font-size: 14px; padding: 9px 16px; border-radius: 8px; }
+.small { font-size: 12.5px; color: var(--ink3); }
+.syn { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 4px; }
+.syn td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.syn td:first-child { white-space: nowrap; }
+code { font: 12.5px Consolas, ui-monospace, monospace; background: var(--soft); border: 1px solid var(--line);
+  border-radius: 4px; padding: 0 4px; color: var(--ink); }
+.dropcover { position: fixed; inset: 0; background: rgba(47,111,223,.12); border: 3px dashed var(--accent); z-index: 50;
+  display: none; align-items: center; justify-content: center; font-size: 20px; font-weight: 600; color: var(--accent);
+  pointer-events: none; }
+body.dragging .dropcover { display: flex; }
+#toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px); opacity: 0;
+  background: var(--ink); color: var(--panel); padding: 9px 14px; border-radius: 8px; max-width: min(640px, calc(100vw - 32px));
+  font-size: 13px; transition: .18s; pointer-events: none; z-index: 60; }
+#toast.on { opacity: 1; transform: translateX(-50%); }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 18px 20px;
+  max-width: 640px; width: calc(100vw - 32px); }
+dialog::backdrop { background: rgba(10,15,30,.4); }
+dialog h3 { margin: 0 0 4px; }
+.hidden { display: none !important; }
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  #right { display: none; }
+  body.viewing #left { display: none; }
+  body.viewing #right { display: flex; }
+  .back { display: inline-block; }
+  .page { padding: 24px 18px 40px; }
+  #viewer { padding: 10px 8px 40px; }
+  .top { padding: 10px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="17" height="23" rx="2" fill="#2f6fdf"/><rect x="9" y="9" width="9" height="2" fill="#fff"/><rect x="9" y="14" width="9" height="2" fill="#fff"/><circle cx="21" cy="20" r="6" fill="none" stroke="#e9a01b" stroke-width="3"/><path d="M25 24l4 4" stroke="#e9a01b" stroke-width="3.4" stroke-linecap="round"/></svg>Document Search</div>
+  <div class="qwrap">
+    <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder='Search, e.g.  budget "next quarter" -draft rep*rt' aria-label="Search">
+    <button class="ibtn" id="helpBtn" title="Search syntax">?</button>
+  </div>
+  <div class="opts">
+    <label title="cat finds cat, not category (use cat* for that)"><input type="checkbox" id="optWhole" checked> Whole words</label>
+    <label><input type="checkbox" id="optCase"> Match case</label>
+    <select id="optMode" title="How the words combine"><option value="all">All words</option><option value="any">Any word</option></select>
+    <select id="optScope" title="Where they must appear together"><option value="doc">in the same file</option><option value="block">in the same paragraph / line</option></select>
+    <select id="optSort" title="Order of the files"><option value="hits">Most matches first</option><option value="name">By name</option><option value="date">Newest first</option></select>
+  </div>
+</header>
+<main>
+  <section id="left">
+    <div id="filesbar" class="filesbar hidden">
+      <div class="filesrow">
+        <span class="count" id="count"></span>
+        <button class="sbtn" data-pick="files">+ Files</button>
+        <button class="sbtn" data-pick="dir">+ Folder</button>
+        <button class="sbtn" id="clearBtn" title="Forget every file">Clear</button>
+      </div>
+      <div class="progress hidden" id="progress"><div></div></div>
+      <div class="baserow" title="Only for the Open in Word button and Copy path: your browser can't see where the files are">
+        <span>Folder on this PC:</span><input id="base" placeholder="optional, e.g. C:\Users\you\Documents" spellcheck="false">
+      </div>
+      <div class="details hidden" id="details"></div>
+    </div>
+    <div id="drop" class="drop">
+      <h2>Load your documents</h2>
+      <div>Word files (.docx) and text files (.txt, .md, .csv, .log and more).</div>
+      <div class="btns">
+        <button class="sbtn primary big" data-pick="files">Choose files</button>
+        <button class="sbtn big" data-pick="dir">Choose a folder</button>
+      </div>
+      <div class="small">or drop files or folders anywhere on this page. Your browser may call this "upload": the files are
+        only read inside this tab, and the page is not allowed to send anything anywhere.</div>
+    </div>
+    <div id="summary" class="hidden" aria-live="polite"></div>
+    <div id="results"></div>
+  </section>
+  <section id="right">
+    <div class="vbar hidden" id="vbar">
+      <button class="sbtn back" id="backBtn">&larr; Results</button>
+      <div class="vtitle"><div class="vname" id="vname"></div><div class="vpath" id="vpath"></div></div>
+      <div class="vnav">
+        <span class="vpos" id="vpos"></span>
+        <button class="sbtn" id="prevBtn" title="Previous result (Shift+F3)">&uarr; Prev</button>
+        <button class="sbtn" id="nextBtn" title="Next result (F3)">&darr; Next</button>
+      </div>
+      <div class="vnav">
+        <button class="sbtn" id="copyFind" title="Copies the text at this spot, so Ctrl+F in Word finds it">Copy text for Ctrl+F</button>
+        <a class="sbtn" id="wordLink" href="#" title="Opens the real file in Word (then press Ctrl+F, Ctrl+V, Enter)">Open in Word</a>
+        <button class="sbtn" id="copyPath">Copy path</button>
+      </div>
+    </div>
+    <div id="viewer">
+      <div class="empty-state" id="intro">
+        <h2>Search inside all your documents</h2>
+        <p>Load files or a whole folder on the left, then type in the box above. Every place a match shows up is listed;
+          click one to read the document right here, from that spot.</p>
+        <table class="syn">
+          <tr><td><code>budget report</code></td><td>both words (switch to <i>Any word</i> for either)</td></tr>
+          <tr><td><code>"next quarter"</code></td><td>the exact phrase</td></tr>
+          <tr><td><code>analy*</code> <code>gr?y</code></td><td><code>*</code> any letters, <code>?</code> exactly one</td></tr>
+          <tr><td><code>+must</code> <code>-draft</code></td><td>must be there / must not be there</td></tr>
+          <tr><td><code>invoice OR receipt</code></td><td>either one</td></tr>
+          <tr><td><code>file:*.docx</code> <code>file:minutes</code></td><td>only files whose name or folder matches</td></tr>
+          <tr><td><code>/\d{3}-\d{4}/</code></td><td>a regular expression</td></tr>
+        </table>
+        <p class="small">Private by design: the files never leave this browser tab (the page's own security policy forbids
+          any network connection), nothing is saved, and closing the tab forgets everything.</p>
+      </div>
+      <div id="doc"></div>
+    </div>
+  </section>
+</main>
+<input type="file" id="pickFiles" multiple class="hidden" accept=".docx,.docm,.dotx,.dotm,.txt,.text,.md,.markdown,.csv,.tsv,.log,.json,.xml,.html,.htm,.ini,.cfg,.conf,.yaml,.yml,.sql,.ps1,.psm1,.py,.js,.ts,.css,.bat,.cmd,.sh,.tex,.srt,.vtt,.rst,.nfo,.toml,.properties,text/plain">
+<input type="file" id="pickDir" multiple webkitdirectory class="hidden">
+<div class="dropcover">Drop to add these files</div>
+<div id="toast" role="status"></div>
+<dialog id="help">
+  <h3>Search syntax</h3>
+  <table class="syn">
+    <tr><td><code>budget report</code></td><td>Files with both words. <i>Any word</i> (top bar) finds files with either.</td></tr>
+    <tr><td><code>"next quarter"</code></td><td>The exact phrase (line breaks and extra spaces between the words are fine).</td></tr>
+    <tr><td><code>analy*</code></td><td><code>*</code> stands for any letters: analysis, analyst, analyze. <code>*ment</code> works too.</td></tr>
+    <tr><td><code>gr?y</code></td><td><code>?</code> stands for exactly one letter: grey, gray. (<code>colo*r</code> finds color and colour.)</td></tr>
+    <tr><td><code>"rep* due"</code></td><td>Wildcards work inside phrases.</td></tr>
+    <tr><td><code>+urgent</code></td><td>Must be there, even in <i>Any word</i> mode.</td></tr>
+    <tr><td><code>-draft</code></td><td>Leaves out files (or paragraphs) that contain it. Put a minus sign in quotes to search for it: <code>"-5"</code>.</td></tr>
+    <tr><td><code>invoice OR receipt</code></td><td>Either word (<code>|</code> works too). Mix freely: <code>tax "form 1040" OR w2 -2019</code>.</td></tr>
+    <tr><td><code>file:*.docx</code></td><td>Only files whose name matches (<code>file:minutes</code>, <code>file:2024*</code>, <code>-file:old</code>). A folder name works too.</td></tr>
+    <tr><td><code>/\b\d{3}-\d{4}\b/</code></td><td>A regular expression (JavaScript syntax).</td></tr>
+  </table>
+  <p class="small"><b>Whole words</b>: <code>cat</code> finds "cat" but not "category" (use <code>cat*</code>). Turn it off
+    to find text anywhere, as Ctrl+F does. <b>Same paragraph / line</b>: all the words must be in one paragraph (or one
+    line of a text file). Curly and straight apostrophes match each other, and so do the different dashes.</p>
+  <p class="small"><b>Keys</b>: Enter searches and opens the first result; F3 / Shift+F3 (or &darr; / &uarr; in the box)
+    go to the next / previous result; Esc returns to the box.</p>
+  <p class="small"><b>Opening the real file</b>: a web page can't start Word or Notepad at a given spot. <i>Copy text for
+    Ctrl+F</i> copies the words at the result, so in Word you press Ctrl+F, Ctrl+V, Enter. Type the folder's path under
+    the file list once, and <i>Open in Word</i> opens the file itself. For a text file the line number is shown: Notepad
+    goes there with Ctrl+G.</p>
+  <p style="text-align:right;margin:0"><button class="sbtn primary" id="helpClose">Close</button></p>
+</dialog>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const W_TRANSITIONAL = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+let W = W_TRANSITIONAL;  // set per file before its (synchronous) walk
+const DOCX = new Set(['docx', 'docm', 'dotx', 'dotm']);
+const TEXT = new Set(('txt text md markdown csv tsv log json xml html htm ini cfg conf yaml yml sql ps1 psm1 py js ts ' +
+  'css bat cmd sh tex srt vtt rst nfo toml properties').split(' '));
+const SEP = '\n\u0001\n';           // between blocks in a file's joined text: no phrase or wildcard crosses it
+const MAX_PER_TERM = 20000;         // matches kept per word per file
+const S = { docs: [], keys: new Set(), skipped: new Map(), results: [], flat: [], cur: -1, open: null, limit: 1500,
+  base: '', win: null, query: null };
+
+// ------------------------------------------------------------------ reading files
+async function inflateRaw(u8) {
+  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+
+async function unzip(buf, want) {
+  // reads the ZIP's central directory and returns {name: bytes} for the entries `want` accepts
+  const dv = new DataView(buf), n = buf.byteLength;
+  let eocd = -1;
+  for (let i = n - 22; i >= Math.max(0, n - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('not a Word .docx file (no ZIP directory): perhaps an old .doc renamed, or password-protected');
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const out = {}, dec = new TextDecoder();
+  for (let k = 0; k < count && p + 46 <= n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const loc = dv.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(buf, p + 46, nlen));
+    p += 46 + nlen + xlen + clen;
+    if (!want(name)) continue;
+    const start = loc + 30 + dv.getUint16(loc + 26, true) + dv.getUint16(loc + 28, true);
+    const data = new Uint8Array(buf, start, csize);
+    if (method === 0) out[name] = data;
+    else if (method === 8) out[name] = await inflateRaw(data);
+    else throw new Error('compressed in a way this page can\'t read (method ' + method + ')');
+  }
+  return out;
+}
+
+const kids = (el, name) => Array.prototype.filter.call(el.children, c => c.localName === name && c.namespaceURI === W);
+const kid = (el, name) => el && Array.prototype.find.call(el.children, c => c.localName === name && c.namespaceURI === W);
+const wval = el => el ? (el.getAttributeNS(W, 'val') ?? el.getAttribute('w:val')) : null;
+function flag(rPr, name) {
+  const e = kid(rPr, name);
+  if (!e) return false;
+  const v = wval(e);
+  return !(v === '0' || v === 'false' || v === 'none' || v === 'off');
+}
+
+async function parseDocx(buf) {
+  let files = await unzip(buf, n => n === 'word/document.xml' || n === '_rels/.rels');
+  let xml = files['word/document.xml'];
+  if (!xml && files['_rels/.rels']) {  // the main part under another name: the package's relationships say where
+    const rels = new DOMParser().parseFromString(new TextDecoder().decode(files['_rels/.rels']), 'application/xml');
+    const rel = [...rels.getElementsByTagName('Relationship')].find(r => /\/officeDocument$/.test(r.getAttribute('Type') || ''));
+    const target = rel && (rel.getAttribute('Target') || '').replace(/^\.?\//, '');
+    if (target) { files = await unzip(buf, n => n === target); xml = files[target]; }
+  }
+  if (!xml) throw new Error('no document inside: not a Word .docx file');
+  const dom = new DOMParser().parseFromString(new TextDecoder().decode(xml), 'application/xml');
+  if (dom.getElementsByTagName('parsererror').length) throw new Error('the document inside could not be read');
+  W = dom.documentElement.namespaceURI || W_TRANSITIONAL;  // Strict Open XML files use another namespace
+  const body = dom.getElementsByTagNameNS(W, 'body')[0];
+  const blocks = [], layout = [];
+  if (body) walk(body, blocks, layout, false);
+  let head = -1;  // the heading each paragraph sits under (for the result's location)
+  blocks.forEach((b, i) => { if (b.tag[0] === 'h' && b.text.trim()) head = i; else b.under = head; });
+  return { blocks, layout };
+}
+
+function walk(node, blocks, out, inTable) {
+  for (const ch of node.children) {
+    if (ch.namespaceURI !== W) continue;
+    const ln = ch.localName;
+    if (ln === 'p') out.push({ type: 'p', i: para(ch, blocks, inTable) });
+    else if (ln === 'tbl') {
+      const rows = [];
+      for (const tr of kids(ch, 'tr')) {
+        const cells = [];
+        for (const tc of kids(tr, 'tc')) { const cell = []; walk(tc, blocks, cell, true); cells.push(cell); }
+        rows.push(cells);
+      }
+      out.push({ type: 'table', rows });
+    } else if (ln === 'sdt') { const c = kid(ch, 'sdtContent'); if (c) walk(c, blocks, out, inTable); }
+    else if (ln === 'customXml' || ln === 'smartTag' || ln === 'ins') walk(ch, blocks, out, inTable);
+  }
+}
+
+function para(p, blocks, inTable) {
+  const pPr = kid(p, 'pPr');
+  let tag = 'p';
+  const style = (wval(kid(pPr, 'pStyle')) || '').replace(/\s+/g, '');
+  const outline = wval(kid(pPr, 'outlineLvl'));
+  let m;
+  if (/^(title)$/i.test(style)) tag = 'h1';
+  else if (/^subtitle$/i.test(style)) tag = 'h2';
+  else if ((m = /^(?:heading|berschrift|titre|kop|rubrik|otsikko|nadpis|nagłówek|encabezado|titolo|título)(\d)$/i.exec(style)))
+    tag = 'h' + Math.min(6, +m[1]);
+  else if (outline !== null && /^\d$/.test(outline) && +outline < 6) tag = 'h' + (+outline + 1);
+  if (tag === 'p' && kid(pPr, 'numPr')) tag = 'li';
+  if (tag === 'p' && /^list/i.test(style)) tag = 'li';
+  const segs = [];
+  runs(p, segs);
+  const text = segs.map(s => s.t).join('');
+  blocks.push({ text, segs, tag, cell: inTable });
+  return blocks.length - 1;
+}
+
+function runs(node, segs) {
+  for (const ch of node.children) {
+    const ln = ch.localName;
+    if (ch.namespaceURI === W) {
+      if (ln === 'r') run(ch, segs);
+      else if (ln === 'del' || ln === 'moveFrom' || ln === 'pPr' || ln === 'rPr' || ln === 'p' || ln === 'tbl') continue;
+      else runs(ch, segs);  // hyperlink, ins, fldSimple, smartTag, sdt, sdtContent, customXml, moveTo ...
+    }
+  }
+}
+
+function run(r, segs) {
+  const rPr = kid(r, 'rPr');
+  if (flag(rPr, 'vanish')) return;
+  const b = flag(rPr, 'b'), i = flag(rPr, 'i'), u = !!kid(rPr, 'u') && wval(kid(rPr, 'u')) !== 'none';
+  let t = '';
+  for (const ch of r.children) {
+    if (ch.namespaceURI !== W) continue;
+    switch (ch.localName) {
+      case 't': t += ch.textContent; break;
+      case 'tab': case 'ptab': t += '\t'; break;
+      case 'br': case 'cr': t += '\n'; break;
+      case 'noBreakHyphen': t += '-'; break;
+    }
+  }
+  if (!t) return;
+  const last = segs[segs.length - 1];
+  if (last && last.b === b && last.i === i && last.u === u) last.t += t; else segs.push({ t, b, i, u });
+}
+
+function decodeText(buf) {
+  const u8 = new Uint8Array(buf);
+  if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder('utf-16le').decode(u8.subarray(2));
+  if (u8[0] === 0xFE && u8[1] === 0xFF) return new TextDecoder('utf-16be').decode(u8.subarray(2));
+  if (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) return new TextDecoder().decode(u8.subarray(3));
+  // UTF-16 without a mark: every other byte zero in a plain-text sample
+  const n = Math.min(u8.length, 4000);
+  let z0 = 0, z1 = 0;
+  for (let i = 0; i < n; i++) if (!u8[i]) (i & 1 ? z1++ : z0++);
+  if (n > 16 && z1 > n * 0.35 && z0 < n * 0.05) return new TextDecoder('utf-16le').decode(u8);
+  if (n > 16 && z0 > n * 0.35 && z1 < n * 0.05) return new TextDecoder('utf-16be').decode(u8);
+  if (z0 + z1 > 8) throw new Error('looks like a binary file, not text');
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(u8); }
+  catch { return new TextDecoder('windows-1252').decode(u8); }
+}
+
+function parseText(buf) {
+  const lines = decodeText(buf).split(/\r\n|\n|\r/);
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  return { blocks: lines.map((text, i) => ({ text, line: i + 1 })), layout: null };
+}
+
+async function loadOne(t) {
+  const doc = { name: t.file.name, path: t.path, ext: t.ext, kind: t.kind, size: t.file.size,
+    modified: t.file.lastModified, blocks: [], layout: null, err: null };
+  try {
+    const buf = await t.file.arrayBuffer();
+    Object.assign(doc, t.kind === 'docx' ? await parseDocx(buf) : parseText(buf));
+  } catch (e) { doc.err = String(e && e.message || e); }
+  const starts = [];
+  let at = 0;
+  for (const b of doc.blocks) { starts.push(at); at += b.text.length + SEP.length; }
+  doc.starts = starts;
+  doc.all = doc.blocks.map(b => b.text).join(SEP);
+  return doc;
+}
+
+async function addEntries(list) {
+  const todo = [];
+  for (const { file, path } of list) {
+    const name = file.name;
+    if (name.startsWith('~$')) { bump('Word lock files (~$...)'); continue; }
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    const kind = DOCX.has(ext) ? 'docx' : TEXT.has(ext) ? 'text' : null;
+    if (!kind) { bump(ext ? '.' + ext : '(no extension)'); continue; }
+    if (file.size > 300 * 1024 * 1024) { bump('over 300 MB'); continue; }
+    const key = path + '|' + file.size + '|' + file.lastModified;
+    if (S.keys.has(key)) continue;
+    S.keys.add(key);
+    todo.push({ file, path, ext, kind });
+  }
+  showLoaded();
+  if (!todo.length) { if (list.length) toast('Nothing new to add: those files are loaded already, or of a kind this page skips.'); return; }
+  const bar = $('#progress');
+  bar.classList.remove('hidden');
+  let done = 0, next = 0;
+  const work = async () => {
+    while (next < todo.length) {
+      const t = todo[next++];
+      S.docs.push(await loadOne(t));
+      done++;
+      if (done % 5 === 0 || done === todo.length) {
+        bar.firstElementChild.style.width = (100 * done / todo.length) + '%';
+        $('#count').innerHTML = `Reading <b>${done.toLocaleString()}</b> of ${todo.length.toLocaleString()} files...`;
+      }
+    }
+  };
+  await Promise.all([work(), work(), work(), work()]);
+  bar.classList.add('hidden');
+  bar.firstElementChild.style.width = '0';
+  S.docs.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
+  showLoaded();
+  search(false);
+  $('#q').focus();
+}
+function bump(k) { S.skipped.set(k, (S.skipped.get(k) || 0) + 1); }
+
+function showLoaded() {
+  const have = S.docs.length > 0;
+  $('#drop').classList.toggle('hidden', have);
+  $('#filesbar').classList.toggle('hidden', !have);
+  $('#summary').classList.toggle('hidden', !have);
+  const bad = S.docs.filter(d => d.err);
+  const skipped = [...S.skipped.values()].reduce((a, b) => a + b, 0);
+  const docx = S.docs.filter(d => d.kind === 'docx' && !d.err).length, txt = S.docs.length - bad.length - docx;
+  let h = `<b>${(S.docs.length - bad.length).toLocaleString()}</b> files loaded (${docx.toLocaleString()} Word, ` +
+    `${txt.toLocaleString()} text)`;
+  if (bad.length || skipped) {
+    h += ` &middot; <button class="linkbtn" id="detailsBtn">${bad.length ? bad.length + ' unreadable' : ''}` +
+      `${bad.length && skipped ? ', ' : ''}${skipped ? skipped.toLocaleString() + ' skipped' : ''}</button>`;
+  }
+  $('#count').innerHTML = h;
+  const d = $('#details');
+  d.innerHTML = bad.map(x => `<div class="bad">${esc(x.path)}: ${esc(x.err)}</div>`).join('') +
+    [...S.skipped].map(([k, v]) => `<div>Skipped ${v.toLocaleString()} &times; ${esc(k)}</div>`).join('') +
+    (S.skipped.has('.doc') ? '<div>Old .doc files can\'t be read here: open them in Word and save as .docx.</div>' : '');
+  const btn = $('#detailsBtn');
+  if (btn) btn.onclick = () => d.classList.toggle('hidden');
+}
+
+// file pickers, drag and drop
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-pick]');
+  if (b) (b.dataset.pick === 'dir' ? $('#pickDir') : $('#pickFiles')).click();
+});
+for (const id of ['#pickFiles', '#pickDir']) {
+  $(id).addEventListener('change', e => {
+    const list = [...e.target.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }));
+    e.target.value = '';
+    addEntries(list);
+  });
+}
+let dragDepth = 0;
+window.addEventListener('dragenter', e => { if (hasFiles(e)) { dragDepth++; document.body.classList.add('dragging'); } });
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', async e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('dragging');
+  const items = [...e.dataTransfer.items].map(it => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if (!items.length) { addEntries([...e.dataTransfer.files].map(f => ({ file: f, path: f.name }))); return; }
+  const out = [];
+  const walkEntry = async (entry, dir) => {
+    if (entry.isFile) {
+      try { const f = await new Promise((res, rej) => entry.file(res, rej)); out.push({ file: f, path: dir + f.name }); }
+      catch { bump('unreadable'); }
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      for (;;) {
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej)).catch(() => []);
+        if (!batch.length) break;
+        for (const x of batch) await walkEntry(x, dir + entry.name + '/');
+      }
+    }
+  };
+  $('#count').textContent = 'Listing the dropped folders...';
+  for (const it of items) await walkEntry(it, '');
+  addEntries(out);
+});
+function hasFiles(e) { return e.dataTransfer && [...e.dataTransfer.types].includes('Files'); }
+$('#clearBtn').onclick = () => {
+  Object.assign(S, { docs: [], keys: new Set(), skipped: new Map(), results: [], flat: [], cur: -1, open: null, win: null });
+  $('#results').innerHTML = '';
+  $('#doc').innerHTML = '';
+  $('#vbar').classList.add('hidden');
+  $('#intro').classList.remove('hidden');
+  $('#details').classList.add('hidden');
+  document.body.classList.remove('viewing');
+  showLoaded();
+  toast('Every file was forgotten.');
+};
+$('#base').addEventListener('input', e => { S.base = e.target.value; updateBar(); });
+
+// ------------------------------------------------------------------ the query
+function tokenize(q) {
+  const out = [], n = q.length, QUOTES = '"\u201c\u201d\u201e';
+  let i = 0;
+  while (i < n) {
+    while (i < n && /\s/.test(q[i])) i++;
+    if (i >= n) break;
+    let sign = '';
+    if ((q[i] === '+' || q[i] === '-') && i + 1 < n && !/\s/.test(q[i + 1])) sign = q[i++];
+    let field = '';
+    const fm = /^(?:file|name|in):/i.exec(q.slice(i, i + 5));
+    if (fm) { field = 'file'; i += fm[0].length; }
+    if (i < n && QUOTES.includes(q[i])) {
+      let j = i + 1;
+      while (j < n && !QUOTES.includes(q[j])) j++;
+      out.push({ sign, field, kind: 'phrase', text: q.slice(i + 1, j) });
+      i = j + 1;
+      continue;
+    }
+    if (!field && q[i] === '/') {
+      let j = i + 1;
+      while (j < n && (q[j] !== '/' || q[j - 1] === '\\')) j++;
+      if (j < n && j > i + 1) { out.push({ sign, field, kind: 'regex', text: q.slice(i + 1, j) }); i = j + 1; continue; }
+    }
+    let j = i;
+    while (j < n && !/\s/.test(q[j])) j++;
+    const w = q.slice(i, j);
+    i = j;
+    if (!sign && !field && (w === 'OR' || w === '|' || w === '||')) { out.push({ kind: 'or' }); continue; }
+    if (!sign && !field && w === 'AND') continue;
+    if (w) out.push({ sign, field, kind: 'term', text: w });
+  }
+  return out;
+}
+
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const WORD = '[\\p{L}\\p{N}_\\p{M}]';
+function termRe(text, whole) {
+  let s = '';
+  for (const ch of text) {
+    if (ch === '*') s += whole ? "[\\p{L}\\p{N}_\\p{M}'\u2019-]*" : '\\S*';
+    else if (ch === '?') s += whole ? WORD : '\\S';
+    else if (/['\u2018\u2019\u02bc]/.test(ch)) s += "['\u2018\u2019\u02bc]";
+    else if (/[-\u2010\u2011\u2012\u2013\u2014\u2212]/.test(ch)) s += '[-\u2010\u2011\u2012\u2013\u2014\u2212]';
+    else if (ch === '"' || ch === '\u201c' || ch === '\u201d') s += '["\u201c\u201d]';
+    else s += escRe(ch);
+  }
+  return s;
+}
+
+function buildQuery(q, o) {
+  const notes = [], clauses = [];
+  let pendingOr = false;
+  for (const t of tokenize(q)) {
+    if (t.kind === 'or') { pendingOr = true; continue; }
+    const alt = makeAlt(t, o, notes);
+    const last = clauses[clauses.length - 1];
+    if (alt && pendingOr && last && !t.sign && !last.sign) last.alts.push(alt);
+    else if (alt) clauses.push({ sign: t.sign, alts: [alt] });
+    pendingOr = false;
+  }
+  let color = 0;
+  for (const c of clauses) if (c.sign !== '-') for (const a of c.alts) if (!a.file) a.color = color++ % 6;
+  const content = clauses.some(c => c.sign !== '-' && c.alts.some(a => !a.file));
+  return { clauses, notes, content };
+}
+
+function makeAlt(t, o, notes) {
+  const text = t.text || '';
+  if (t.field === 'file') {
+    const pat = text.replace(/\\/g, '/');
+    if (!pat) return null;
+    if (/[*?]/.test(pat)) {
+      const g = [...pat].map(ch => ch === '*' ? '.*' : ch === '?' ? '.' : escRe(ch)).join('');
+      return { file: true, re: new RegExp('(^|/)' + g + '$', 'iu') };
+    }
+    return { file: true, re: new RegExp(escRe(pat), 'iu') };
+  }
+  const flags = 'gu' + (o.matchCase ? '' : 'i');
+  let src;
+  if (t.kind === 'regex') {
+    try { new RegExp(text, flags); } catch (e) { notes.push(`The regular expression /${text}/ doesn't work: ${e.message}`); return null; }
+    if (new RegExp('^(?:' + text + ')$', flags.replace('g', '')).test('')) { notes.push(`/${text}/ matches empty text: left out`); return null; }
+    src = text;
+  } else {
+    const s = text.trim();
+    if (!s || !/[^*?\s]/.test(s)) { if (s) notes.push(`"${s}" has nothing to look for but wildcards: left out`); return null; }
+    src = t.kind === 'phrase' ? s.split(/\s+/).map(w => termRe(w, o.whole)).join('\\s+') : termRe(s, o.whole);
+    if (o.whole) src = `(?<!${WORD})(?:${src})(?!${WORD})`;
+  }
+  return { file: false, re: new RegExp(src, flags) };
+}
+
+function findAll(doc, re) {
+  // every match in the file's joined text, as Map(block -> [[start, end], ...]) in block coordinates
+  const map = new Map(), all = doc.all, starts = doc.starts;
+  let n = 0, m;
+  re.lastIndex = 0;
+  while ((m = re.exec(all)) !== null) {
+    if (m[0].length === 0) { re.lastIndex++; continue; }
+    let lo = 0, hi = starts.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= m.index) lo = mid; else hi = mid - 1; }
+    const s = m.index - starts[lo], len = doc.blocks[lo].text.length;
+    if (s < len) {
+      const e = Math.min(len, s + m[0].length);
+      if (!map.has(lo)) map.set(lo, []);
+      map.get(lo).push([s, e]);
+      if (++n >= MAX_PER_TERM) break;
+    }
+  }
+  return map;
+}
+
+function decide(clauses, sat, mode) {
+  let plain = false, plainOk = false;
+  for (let ci = 0; ci < clauses.length; ci++) {
+    const c = clauses[ci], s = sat(ci);
+    if (c.sign === '-') { if (s) return false; }
+    else if (c.sign === '+' || mode === 'all') { if (!s) return false; }
+    else { plain = true; if (s) plainOk = true; }
+  }
+  return !plain || plainOk;
+}
+
+function evalDoc(doc, Q, o) {
+  if (doc.err) return null;
+  const cl = Q.clauses;
+  const fileOk = new Map();
+  const isFile = a => { if (!fileOk.has(a)) fileOk.set(a, a.re.test(doc.path)); return fileOk.get(a); };
+  const M = cl.map(c => c.alts.map(a => a.file ? null : findAll(doc, a.re)));
+  const ranges = new Map();
+  const take = b => {
+    for (let ci = 0; ci < cl.length; ci++) {
+      if (cl[ci].sign === '-') continue;
+      cl[ci].alts.forEach((a, ai) => {
+        if (a.file) return;
+        const r = M[ci][ai].get(b);
+        if (!r) return;
+        if (!ranges.has(b)) ranges.set(b, []);
+        for (const [s, e] of r) ranges.get(b).push([s, e, a.color]);
+      });
+    }
+  };
+  if (o.scope === 'block' && Q.content) {
+    const cand = new Set();
+    for (let ci = 0; ci < cl.length; ci++) if (cl[ci].sign !== '-') for (const m of M[ci]) if (m) for (const b of m.keys()) cand.add(b);
+    for (const b of [...cand].sort((x, y) => x - y)) {
+      const sat = ci => cl[ci].alts.some((a, ai) => a.file ? isFile(a) : M[ci][ai].has(b));
+      if (decide(cl, sat, o.mode)) take(b);
+    }
+    if (!ranges.size) return null;
+  } else {
+    const sat = ci => cl[ci].alts.some((a, ai) => a.file ? isFile(a) : M[ci][ai].size > 0);
+    if (!decide(cl, sat, o.mode)) return null;
+    const bs = new Set();
+    for (let ci = 0; ci < cl.length; ci++) if (cl[ci].sign !== '-') for (const m of M[ci]) if (m) for (const b of m.keys()) bs.add(b);
+    for (const b of [...bs].sort((x, y) => x - y)) take(b);
+    if (!ranges.size && Q.content) return null;
+  }
+  const hits = [];
+  let count = 0;
+  for (const [b, r] of ranges) {
+    r.sort((x, y) => x[0] - y[0] || y[1] - x[1]);
+    const merged = [];
+    for (const x of r) {
+      const last = merged[merged.length - 1];
+      if (last && x[0] < last[1]) { if (x[1] > last[1]) last[1] = x[1]; } else merged.push(x.slice());
+    }
+    ranges.set(b, merged);
+    count += merged.length;
+    hits.push({ doc, b, ranges: merged });
+  }
+  if (!hits.length) hits.push({ doc, b: -1, ranges: [] });  // a file-name match with no words to find
+  return { doc, hits, count, map: ranges };
+}
+
+function opts() {
+  return { whole: $('#optWhole').checked, matchCase: $('#optCase').checked, mode: $('#optMode').value,
+    scope: $('#optScope').value, sort: $('#optSort').value };
+}
+
+function search(openFirst) {
+  const q = $('#q').value, o = opts();
+  S.limit = 1500;
+  const sum = $('#summary');
+  for (const d of S.docs) d.map = null;
+  if (!q.trim()) {
+    S.results = []; S.flat = []; S.cur = -1; S.query = null;
+    $('#results').innerHTML = '';
+    sum.innerHTML = S.docs.length ? `Type in the box above to search ${S.docs.length.toLocaleString()} files.` : '';
+    if (S.open) renderDoc(S.open, true);
+    return;
+  }
+  const t0 = performance.now();
+  const Q = buildQuery(q, o);
+  S.query = Q;
+  const res = [];
+  if (Q.clauses.length) for (const d of S.docs) { const r = evalDoc(d, Q, o); if (r) { d.map = r.map; res.push(r); } }
+  const name = (a, b) => a.doc.path.localeCompare(b.doc.path, undefined, { numeric: true, sensitivity: 'base' });
+  if (o.sort === 'hits') res.sort((a, b) => b.count - a.count || name(a, b));
+  else if (o.sort === 'date') res.sort((a, b) => b.doc.modified - a.doc.modified || name(a, b));
+  else res.sort(name);
+  S.results = res;
+  S.flat = [];
+  for (const r of res) { r.first = S.flat.length; for (const h of r.hits) { h.k = S.flat.length; S.flat.push(h); } }
+  const ms = performance.now() - t0, matches = res.reduce((a, r) => a + r.count, 0);
+  const places = res.reduce((a, r) => a + r.hits.filter(h => h.b >= 0).length, 0);
+  const readable = S.docs.filter(d => !d.err).length;
+  const n = (k, one, many) => `<b>${k.toLocaleString()}</b> ${k === 1 ? one : many}`;
+  let h = res.length
+    ? (Q.content
+      ? `${n(matches, 'match', 'matches')} in ${n(places, o.scope === 'block' ? 'paragraph / line' : 'place', o.scope === 'block' ? 'paragraphs / lines' : 'places')} across ${n(res.length, 'file', 'files')} of ${readable.toLocaleString()}`
+      : `${n(res.length, 'file', 'files')} of ${readable.toLocaleString()} match`)
+    : `No matches in ${readable.toLocaleString()} files`;
+  h += ` <span class="small">(${ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s'})</span>`;
+  for (const n of Q.notes) h += `<span class="note">${esc(n)}</span>`;
+  sum.innerHTML = h;
+  S.cur = -1;
+  renderResults();
+  if (openFirst && S.flat.length) openHit(0);
+  else if (S.open) { renderDoc(S.open, true); updateBar(); }
+}
+
+// ------------------------------------------------------------------ results list
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function marked(text, ranges, from, to) {
+  let h = '', p = from;
+  for (const [s, e, c] of ranges) {
+    if (e <= from || s >= to) continue;
+    const a = Math.max(s, p), z = Math.min(e, to);
+    if (a > p) h += esc(text.slice(p, a));
+    if (z > a) h += `<mark class="t${c}">${esc(text.slice(a, z))}</mark>`;
+    p = Math.max(p, z);
+  }
+  if (p < to) h += esc(text.slice(p, to));
+  return h;
+}
+function snippet(text, ranges) {
+  if (!ranges.length) return esc(text.slice(0, 240));
+  const first = ranges[0];
+  let a = Math.max(0, first[0] - 70);
+  if (a > 0) { const sp = text.lastIndexOf(' ', a + 12); if (sp > a - 25 && sp < first[0]) a = sp + 1; }
+  let z = Math.min(text.length, Math.max(a + 260, first[1] + 40));
+  if (z < text.length) { const sp = text.indexOf(' ', z - 15); if (sp > 0 && sp < z + 25) z = sp; }
+  return (a > 0 ? '&hellip;' : '') + marked(text, ranges, a, z).replace(/[\t\n]+/g, ' ') + (z < text.length ? '&hellip;' : '');
+}
+function wholeLabel() {  // a file that matches with no words to show: by its name, or by lacking the -words
+  const Q = S.query;
+  return Q && Q.clauses.some(c => c.sign !== '-' && c.alts.some(a => a.file)) ? 'the file name matches'
+    : 'the whole file matches (none of the left-out words)';
+}
+function where(h) {
+  const d = h.doc;
+  if (h.b < 0) return wholeLabel();
+  const b = d.blocks[h.b];
+  if (d.kind === 'text') return 'line ' + b.line.toLocaleString();
+  let s = '\u00b6 ' + (h.b + 1).toLocaleString();
+  if (b.cell) s += ' \u00b7 table';
+  if (b.tag && b.tag[0] === 'h') s += ' \u00b7 heading';
+  else if (b.under >= 0) s += ' \u00b7 under \u201c' + d.blocks[b.under].text.trim().slice(0, 70) + '\u201d';
+  return s;
+}
+const dirOf = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')).replace(/\//g, '\\') : '';
+
+function renderResults() {
+  const box = $('#results');
+  box.innerHTML = '';
+  box.scrollTop = 0;
+  const frag = document.createDocumentFragment();
+  let shown = 0;
+  for (const r of S.results) {
+    if (shown >= S.limit) break;
+    const g = document.createElement('div');
+    g.className = 'grp';
+    const d = r.doc;
+    let h = `<div class="fhead" data-k="${r.first}"><button class="chev" title="Fold">&#9660;</button>` +
+      `<span class="badge">${d.kind === 'docx' ? 'Word' : esc(d.ext)}</span><span class="fname">${esc(d.name)}</span>` +
+      `<span class="fdir">${esc(dirOf(d.path))}</span><span class="fcount">${r.count ? r.count.toLocaleString() : ''}</span></div><div class="hits">`;
+    for (const x of r.hits) {
+      if (shown >= S.limit) break;
+      shown++;
+      if (x.b < 0) { h += `<button class="hit" data-k="${x.k}"><span class="loc">${wholeLabel()}</span><span class="snip">${esc(d.blocks.find(b => b.text.trim())?.text.slice(0, 200) || '(empty)')}</span></button>`; continue; }
+      h += `<button class="hit" data-k="${x.k}"><span class="loc">${esc(where(x))}</span><span class="snip">${snippet(d.blocks[x.b].text, x.ranges)}</span></button>`;
+    }
+    g.innerHTML = h + '</div>';
+    frag.appendChild(g);
+  }
+  box.appendChild(frag);
+  if (shown < S.flat.length) {
+    const more = document.createElement('button');
+    more.className = 'sbtn more';
+    more.textContent = `Show more (${(S.flat.length - shown).toLocaleString()} more places)`;
+    more.onclick = () => { const top = box.scrollTop; S.limit += 3000; renderResults(); box.scrollTop = top; markSel(); };
+    box.appendChild(more);
+  }
+  markSel();
+}
+$('#results').addEventListener('click', e => {
+  const chev = e.target.closest('.chev');
+  if (chev) { chev.closest('.grp').classList.toggle('closed'); return; }
+  const el = e.target.closest('[data-k]');
+  if (el) openHit(+el.dataset.k);
+});
+function markSel() {
+  const box = $('#results');
+  box.querySelectorAll('.hit.sel').forEach(x => x.classList.remove('sel'));
+  if (S.cur < 0) return;
+  const el = box.querySelector(`.hit[data-k="${S.cur}"]`);
+  if (el) {
+    el.classList.add('sel');
+    const r = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+    if (r.top < br.top + 40 || r.bottom > br.bottom) el.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// ------------------------------------------------------------------ the document viewer
+function blockHtml(b, ranges) {
+  const segs = b.segs && b.segs.length ? b.segs : [{ t: b.text }];
+  let h = '', pos = 0;
+  for (const sg of segs) {
+    const a = pos, z = pos + sg.t.length;
+    let inner = marked(b.text, ranges, a, z);
+    if (sg.u) inner = '<u>' + inner + '</u>';
+    if (sg.i) inner = '<i>' + inner + '</i>';
+    if (sg.b) inner = '<b>' + inner + '</b>';
+    h += inner;
+    pos = z;
+  }
+  return h;
+}
+function layoutHtml(items, d, map) {
+  let h = '';
+  for (const it of items) {
+    if (it.type === 'p') {
+      const b = d.blocks[it.i];
+      const cls = b.tag === 'li' ? 'li' : b.tag[0] === 'h' ? 'h ' + b.tag : 'p';
+      h += b.text ? `<div class="${cls}" id="b${it.i}">${blockHtml(b, map.get(it.i) || [])}</div>`
+        : `<div class="p empty" id="b${it.i}"></div>`;
+    } else {
+      h += '<table class="dt">';
+      for (const row of it.rows) h += '<tr>' + row.map(cell => '<td>' + layoutHtml(cell, d, map) + '</td>').join('') + '</tr>';
+      h += '</table>';
+    }
+  }
+  return h;
+}
+const WIN = 3000;  // lines of a long text file shown at once
+function renderDoc(d, keepScroll, center) {
+  const v = $('#viewer'), top = v.scrollTop, box = $('#doc');
+  $('#intro').classList.add('hidden');
+  const map = d.map || new Map();
+  if (d.err) { box.innerHTML = `<div class="page"><p class="bad">${esc(d.err)}</p></div>`; S.win = null; return; }
+  if (d.kind === 'docx') {
+    box.innerHTML = `<div class="page">${layoutHtml(d.layout, d, map) || '<p class="small">(no text in this document)</p>'}</div>`;
+    S.win = null;
+  } else {
+    const n = d.blocks.length;
+    let a = 0, z = n;
+    if (n > WIN) {
+      const c = center != null ? center : (S.win && S.win.doc === d ? S.win.a + WIN / 2 : 0);
+      a = Math.max(0, Math.min(n - WIN, c - WIN / 2));
+      z = Math.min(n, a + WIN);
+    }
+    let h = '<div class="page txt">';
+    if (a > 0) h += `<button class="sbtn winbtn" data-win="${Math.max(0, a - WIN / 2)}">Show earlier lines (${a.toLocaleString()} above)</button>`;
+    for (let i = a; i < z; i++) {
+      const b = d.blocks[i];
+      h += `<div class="ln" id="b${i}"><span class="no">${b.line}</span><span class="tx">${blockHtml(b, map.get(i) || []) || ' '}</span></div>`;
+    }
+    if (z < n) h += `<button class="sbtn winbtn" data-win="${z + WIN / 2}">Show later lines (${(n - z).toLocaleString()} below)</button>`;
+    box.innerHTML = h + '</div>';
+    S.win = { doc: d, a, z };
+  }
+  if (keepScroll) v.scrollTop = top;
+}
+$('#doc').addEventListener('click', e => {
+  const w = e.target.closest('[data-win]');
+  if (!w || !S.open) return;
+  renderDoc(S.open, false, +w.dataset.win);
+  const cur = S.cur >= 0 ? S.flat[S.cur] : null;
+  if (cur && cur.doc === S.open) setCur(cur, false);
+});
+
+function setCur(h, scroll) {
+  $('#doc').querySelectorAll('.cur').forEach(x => x.classList.remove('cur'));
+  if (h.b < 0) { $('#viewer').scrollTop = 0; return; }
+  const el = document.getElementById('b' + h.b);
+  if (!el) return;
+  el.classList.add('cur');
+  if (scroll) el.scrollIntoView({ block: 'center' });
+}
+
+function openHit(k) {
+  if (k < 0 || k >= S.flat.length) return;
+  const h = S.flat[k];
+  S.cur = k;
+  const d = h.doc;
+  document.body.classList.add('viewing');  // first: on a phone the viewer must be showing before it can scroll
+  const needWin = d.kind === 'text' && d.blocks.length > WIN && (!S.win || S.win.doc !== d || h.b < S.win.a || h.b >= S.win.z);
+  if (S.open !== d || needWin) { S.open = d; renderDoc(d, false, h.b); }
+  setCur(h, true);
+  updateBar();
+  markSel();
+}
+
+function fullPath(d) {
+  const base = S.base.trim().replace(/^"|"$/g, '').replace(/[\\/]+$/, '');
+  let rel = d.path;
+  if (!base) return null;
+  const first = rel.split('/')[0], last = base.split(/[\\/]/).pop();
+  if (rel.includes('/') && last && last.toLowerCase() === first.toLowerCase()) rel = rel.slice(first.length + 1);
+  return base + '\\' + rel.replace(/\//g, '\\');
+}
+function wordUrl(full) {
+  const f = full.replace(/\\/g, '/');
+  let url;
+  if (f.startsWith('//')) url = 'file:' + f.split('/').map((s, i) => i < 3 ? s : encodeURIComponent(s)).join('/');
+  else url = 'file:///' + f.split('/').map((s, i) => i === 0 ? s : encodeURIComponent(s)).join('/');
+  return 'ms-word:ofe|u|' + url;
+}
+
+function findText(h) {
+  if (!h || h.b < 0) return '';
+  const t = h.doc.blocks[h.b].text, [s, e] = h.ranges[0] || [0, 0];
+  let z = Math.min(t.length, e + 60);
+  const stop = t.slice(s, z).search(/[\t\n]/);
+  if (stop > 0) z = s + stop;
+  else if (z < t.length) { const sp = t.lastIndexOf(' ', z); if (sp > e) z = sp; }
+  return t.slice(s, Math.min(z, s + 250)).trim();
+}
+
+function updateBar() {
+  const h = S.cur >= 0 ? S.flat[S.cur] : null, d = S.open;
+  $('#vbar').classList.toggle('hidden', !d);
+  if (!d) return;
+  $('#vname').textContent = d.name;
+  const fp = fullPath(d);
+  $('#vpath').textContent = (fp || d.path.replace(/\//g, '\\')) + ' \u00b7 ' + fmtSize(d.size) +
+    (d.modified ? ' \u00b7 ' + new Date(d.modified).toLocaleDateString() : '');
+  let pos = '';
+  if (h && h.doc === d) {
+    const r = S.results.find(x => x.doc === d);
+    const inDoc = r ? h.k - r.first + 1 : 0;
+    pos = `Result ${(S.cur + 1).toLocaleString()} of ${S.flat.length.toLocaleString()}`;
+    if (r && r.hits.length > 1) pos += ` \u00b7 ${inDoc} of ${r.hits.length} here`;
+    if (d.kind === 'text' && h.b >= 0) pos += ` \u00b7 line ${d.blocks[h.b].line.toLocaleString()}`;
+  }
+  $('#vpos').textContent = pos;
+  $('#prevBtn').disabled = S.cur <= 0;
+  $('#nextBtn').disabled = S.cur < 0 || S.cur >= S.flat.length - 1;
+  const wl = $('#wordLink');
+  wl.classList.toggle('hidden', d.kind !== 'docx');
+  wl.href = fp ? wordUrl(fp) : '#';
+  wl.style.opacity = fp ? '' : '.6';
+  $('#copyFind').classList.toggle('hidden', !(h && h.doc === d && h.b >= 0));
+  $('#copyFind').textContent = d.kind === 'docx' ? 'Copy text for Ctrl+F' : 'Copy line';
+}
+function fmtSize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+let toastTimer;
+function toast(msg, ms) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), ms || 4200);
+}
+
+$('#copyFind').onclick = async () => {
+  const h = S.flat[S.cur];
+  if (!h) return;
+  if (h.doc.kind === 'text') {
+    const ok = await copy(h.doc.blocks[h.b].text);
+    toast(ok ? `Copied line ${h.doc.blocks[h.b].line}. In Notepad, Ctrl+G and ${h.doc.blocks[h.b].line} goes to it.` : 'Copying was blocked by the browser.');
+    return;
+  }
+  const t = findText(h);
+  const ok = await copy(t);
+  toast(ok ? `Copied \u201c${t.length > 70 ? t.slice(0, 70) + '\u2026' : t}\u201d. In Word: Ctrl+F, Ctrl+V, Enter.` : 'Copying was blocked by the browser.');
+};
+$('#wordLink').addEventListener('click', async e => {
+  const d = S.open;
+  if (!d) return;
+  if (!fullPath(d)) {
+    e.preventDefault();
+    $('#base').focus();
+    toast('Type the folder\'s path on your PC in the box under the file list first (the browser can\'t see where files live).', 6500);
+    return;
+  }
+  const t = findText(S.flat[S.cur]);
+  if (t && S.flat[S.cur] && S.flat[S.cur].doc === d) {
+    await copy(t);
+    toast('Opening in Word... The text at this result is copied: Ctrl+F, Ctrl+V, Enter jumps there.', 6500);
+  }
+});
+$('#copyPath').onclick = async () => {
+  const d = S.open;
+  if (!d) return;
+  const p = fullPath(d) || d.path.replace(/\//g, '\\');
+  const ok = await copy(p);
+  toast(ok ? (fullPath(d) ? 'Copied ' + p : 'Copied ' + p + ' (type the folder\'s path under the file list for the full path)') : 'Copying was blocked.');
+};
+$('#prevBtn').onclick = () => openHit(S.cur - 1);
+$('#nextBtn').onclick = () => openHit(S.cur + 1);
+$('#backBtn').onclick = () => document.body.classList.remove('viewing');
+
+// ------------------------------------------------------------------ the box, options, keys
+let timer;
+$('#q').addEventListener('input', () => {
+  clearTimeout(timer);
+  const big = S.docs.reduce((a, d) => a + d.all.length, 0) > 40e6;
+  if (!big) timer = setTimeout(() => search(false), 220);
+});
+$('#q').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); search(true); }
+  else if (e.key === 'ArrowDown' && S.flat.length) { e.preventDefault(); openHit(Math.min(S.flat.length - 1, S.cur + 1)); }
+  else if (e.key === 'ArrowUp' && S.flat.length) { e.preventDefault(); openHit(Math.max(0, S.cur - 1)); }
+});
+for (const id of ['#optWhole', '#optCase', '#optMode', '#optScope', '#optSort']) $(id).addEventListener('change', () => search(false));
+document.addEventListener('keydown', e => {
+  if (e.key === 'F3') { e.preventDefault(); openHit(e.shiftKey ? S.cur - 1 : S.cur + 1); }
+  else if (e.key === 'Escape' && !$('#help').open) { $('#q').focus(); $('#q').select(); }
+});
+$('#helpBtn').onclick = () => $('#help').showModal();
+$('#helpClose').onclick = () => $('#help').close();
+if (!('DecompressionStream' in window)) {
+  toast('This browser is too old to read Word files here (text files still work). Edge or Chrome 103+ can.', 9000);
+}
+$('#q').focus();
+</script>
+</body>
+</html>
